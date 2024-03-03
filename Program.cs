@@ -42,8 +42,8 @@ internal class Program
 
         foreach (var sourceFile in sourceFilesMap)
         {
-            string sourceFileChecksum = sourceFile.Key;
-            string sourceFilePath = sourceFile.Value;
+            string sourceFileChecksum = sourceFile.Value;
+            string sourceFilePath = sourceFile.Key;
 
             if (replicaFilesMap.TryGetValue(sourceFileChecksum, out string? replicaFilePath))
             {
@@ -75,7 +75,7 @@ internal class Program
         foreach (string file in Directory.GetFiles(filePath, "*", SearchOption.AllDirectories))
         {
             string checksum = MD5Checksum(file);
-            filesMap.Add(checksum, file);
+            filesMap.Add(file,checksum);
         }
 
         return filesMap;
@@ -104,7 +104,7 @@ internal class Program
         }
 
         // Deleting unnecessary directories 
-        foreach (string replicaDirectory in Directory.GetDirectories(replicaPath, "*", SearchOption.AllDirectories))
+        foreach (string replicaDirectory in Directory.GetDirectories(replicaPath, "*", SearchOption.AllDirectories).Reverse())
         {
             string sourceDirectory = replicaDirectory.Replace(replicaPath, sourcePath);
             if (!Directory.Exists(sourceDirectory))
