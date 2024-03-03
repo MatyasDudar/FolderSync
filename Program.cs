@@ -75,13 +75,11 @@ internal class Program
         foreach (string file in Directory.GetFiles(filePath, "*", SearchOption.AllDirectories))
         {
             string checksum = MD5Checksum(file);
-            filesMap.Add(file,checksum);
+            filesMap.Add(file, checksum);
         }
 
         return filesMap;
     }
-
-
 
     static void SyncFolder(string sourcePath, string replicaPath, string logFilePath)
     {
