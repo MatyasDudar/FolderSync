@@ -23,6 +23,7 @@ internal class Program
         {
             try
             {
+                FileMoveCheck(sourcePath, replicaPath, logDest);
                 SyncFolder(sourcePath, replicaPath, logDest);
             }
             catch (Exception e)
@@ -33,6 +34,55 @@ internal class Program
         }
     }
 
+    // improve performance and reduce unnecessary disk usage by checking moving files (prevents deleting and copying of large files again and again)
+    static void FileMoveCheck(string sourcePath, string replicaPath, string logFilePath)
+    {
+        Dictionary<string, string> sourceFilesMap = GenerateFilesMap(sourcePath);
+        Dictionary<string, string> replicaFilesMap = GenerateFilesMap(replicaPath);
+
+        foreach (var sourceFile in sourceFilesMap)
+        {
+            string sourceFileChecksum = sourceFile.Key;
+            string sourceFilePath = sourceFile.Value;
+
+            if (replicaFilesMap.TryGetValue(sourceFileChecksum, out string? replicaFilePath))
+            {
+                string adjustedSourcePath = sourceFilePath.Replace(sourcePath, "");
+                string adjustedReplicaPath = replicaFilePath.Replace(replicaPath, "");
+
+                if (adjustedReplicaPath != adjustedSourcePath)
+                {
+                    string newReplicaFilePath = Path.Combine(replicaPath, adjustedSourcePath.TrimStart('\\'));
+                    string? newReplicaDirPath = Path.GetDirectoryName(newReplicaFilePath);
+
+                    if (!Directory.Exists(newReplicaDirPath))
+                    {
+                        Directory.CreateDirectory(newReplicaDirPath!);
+                        Log($"Directory created: {replicaPath}", LogMessageLevel.INFO, logFilePath);
+                    }
+
+                    File.Move(replicaFilePath, newReplicaFilePath);
+                    Log($"File moved or renamed from: {replicaFilePath} to {newReplicaFilePath}", LogMessageLevel.INFO, logFilePath);
+                }
+            }
+        }
+    }
+
+    static Dictionary<string, string> GenerateFilesMap(string filePath)
+    {
+        Dictionary<string, string> filesMap = [];
+
+        foreach (string file in Directory.GetFiles(filePath, "*", SearchOption.AllDirectories))
+        {
+            string checksum = MD5Checksum(file);
+            filesMap.Add(checksum, file);
+        }
+
+        return filesMap;
+    }
+
+
+
     static void SyncFolder(string sourcePath, string replicaPath, string logFilePath)
     {
         // replica directory availability
@@ -40,6 +90,28 @@ internal class Program
         {
             Directory.CreateDirectory(replicaPath);
             Log($"Directory created: {replicaPath}", LogMessageLevel.INFO, logFilePath);
+        }
+
+        // Deleting unnecessary files 
+        foreach (string replicaFile in Directory.GetFiles(replicaPath, "*", SearchOption.AllDirectories))
+        {
+            string sourceFile = replicaFile.Replace(replicaPath, sourcePath);
+            if (!File.Exists(sourceFile))
+            {
+                File.Delete(replicaFile);
+                Log($"File deleted: {replicaFile}", LogMessageLevel.INFO, logFilePath);
+            }
+        }
+
+        // Deleting unnecessary directories 
+        foreach (string replicaDirectory in Directory.GetDirectories(replicaPath, "*", SearchOption.AllDirectories))
+        {
+            string sourceDirectory = replicaDirectory.Replace(replicaPath, sourcePath);
+            if (!Directory.Exists(sourceDirectory))
+            {
+                Directory.Delete(replicaDirectory);
+                Log($"Directory deleted: {replicaDirectory}", LogMessageLevel.INFO, logFilePath);
+            }
         }
 
         // Directory check-creation
@@ -66,28 +138,6 @@ internal class Program
             {
                 File.Copy(sourceFile, replicaFile, true);
                 Log($"File changed: {replicaFile}", LogMessageLevel.INFO, logFilePath);
-            }
-        }
-
-        // Deleting unnecessary files 
-        foreach (string replicaFile in Directory.GetFiles(replicaPath, "*", SearchOption.AllDirectories))
-        {
-            string sourceFile = replicaFile.Replace(replicaPath, sourcePath);
-            if (!File.Exists(sourceFile))
-            {
-                File.Delete(replicaFile);
-                Log($"File deleted: {replicaFile}", LogMessageLevel.INFO, logFilePath);
-            }
-        }
-
-        // Deleting unnecessary directories 
-        foreach (string replicaDirectory in Directory.GetDirectories(replicaPath, "*", SearchOption.AllDirectories))
-        {
-            string sourceDirectory = replicaDirectory.Replace(replicaPath, sourcePath);
-            if (!Directory.Exists(sourceDirectory))
-            {
-                Directory.Delete(replicaDirectory);
-                Log($"Directory deleted: {replicaDirectory}", LogMessageLevel.INFO, logFilePath);
             }
         }
     }
